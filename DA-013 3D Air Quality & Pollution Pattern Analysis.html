@@ -1,0 +1,1093 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>DA-013: Air Quality & Pollution Pattern Analysis (3D)</title>
+  <!-- Tailwind CSS for responsive glassmorphism UI -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Inter Font -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <!-- Three.js & OrbitControls via CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+  <style>
+    * {
+      box-sizing: border-box;
+      font-family: 'Inter', sans-serif;
+      -webkit-tap-highlight-color: transparent;
+    }
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: #060b14;
+      color: #f8fafc;
+    }
+    #canvas-container {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+      touch-action: none;
+    }
+    .glass-panel {
+      background: rgba(15, 23, 42, 0.72);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border: 1px solid rgba(148, 163, 184, 0.18);
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+    }
+    .glass-chip {
+      background: rgba(30, 41, 59, 0.65);
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      transition: all 0.2s ease;
+    }
+    .glass-chip:hover {
+      background: rgba(51, 65, 85, 0.85);
+      border-color: rgba(56, 189, 248, 0.5);
+    }
+    .glass-chip.active {
+      background: linear-gradient(135deg, rgba(14, 165, 233, 0.35), rgba(20, 184, 166, 0.35));
+      border-color: #38bdf8;
+      color: #ffffff;
+      box-shadow: 0 0 14px rgba(56, 189, 248, 0.3);
+    }
+    /* Custom thin scrollbar for mobile horizontal strips */
+    .no-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .no-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+    @keyframes pulseGlow {
+      0%, 100% { opacity: 0.9; transform: scale(1); }
+      50% { opacity: 1; transform: scale(1.04); }
+    }
+    .badge-pulse {
+      animation: pulseGlow 2.5s infinite ease-in-out;
+    }
+  </style>
+</head>
+<body>
+  <!-- 3D WebGL Viewport -->
+  <div id="canvas-container"></div>
+
+  <!-- Top Header & Controls Overlay -->
+  <div class="fixed top-0 left-0 right-0 z-10 p-3 sm:p-4 pointer-events-none flex flex-col gap-2.5">
+    <!-- Top Row: Title + Quick Camera & Info Actions -->
+    <div class="flex items-start justify-between gap-2">
+      <div class="glass-panel rounded-2xl px-3.5 py-2.5 sm:px-5 sm:py-3 pointer-events-auto max-w-xl">
+        <div class="flex items-center gap-2 mb-0.5">
+          <span class="inline-block w-2 h-2 rounded-full bg-teal-400 badge-pulse"></span>
+          <span class="text-[10px] sm:text-xs font-bold uppercase tracking-widest text-teal-400">
+            Environmental Analytics • 3D Spatial Model
+          </span>
+        </div>
+        <h1 class="text-sm sm:text-lg font-extrabold text-white leading-tight">
+          DA-013: Air Quality &amp; Pollution Pattern Analysis
+        </h1>
+        <p class="hidden sm:block text-xs text-slate-300 mt-0.5">
+          Tap any 3D monitoring tower or switch seasons to inspect pollutant dispersion across urban zones.
+        </p>
+      </div>
+
+      <!-- Camera & Summary Pill Controls -->
+      <div class="flex items-center gap-1.5 sm:gap-2 pointer-events-auto shrink-0">
+        <button id="btn-autorotate" title="Toggle Auto-Rotate"
+          class="glass-panel glass-chip active rounded-xl px-2.5 py-2 sm:px-3.5 sm:py-2.5 text-xs font-semibold text-slate-200 flex items-center gap-1.5 cursor-pointer">
+          <svg class="w-4 h-4 text-sky-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+          <span class="hidden md:inline">Auto-Rotate</span>
+        </button>
+
+        <button id="btn-reset-cam" title="Reset 3D Camera"
+          class="glass-panel glass-chip rounded-xl px-2.5 py-2 sm:px-3.5 sm:py-2.5 text-xs font-semibold text-slate-200 flex items-center gap-1.5 cursor-pointer">
+          <svg class="w-4 h-4 text-teal-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+          </svg>
+          <span class="hidden md:inline">Reset View</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Second Row: Season Selector & Pollutant Selector -->
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-2">
+      <!-- Season Filter Strip -->
+      <div class="glass-panel rounded-2xl p-1.5 pointer-events-auto flex items-center gap-1 overflow-x-auto no-scrollbar max-w-full">
+        <span class="text-[11px] font-semibold text-slate-400 px-2 shrink-0">Season:</span>
+        <button data-season="winter" class="season-btn glass-chip active rounded-xl px-3 py-1.5 text-xs font-semibold whitespace-nowrap cursor-pointer">
+          ❄️ Winter (Peak)
+        </button>
+        <button data-season="postMonsoon" class="season-btn glass-chip rounded-xl px-3 py-1.5 text-xs font-semibold whitespace-nowrap cursor-pointer">
+          🍂 Post-Monsoon
+        </button>
+        <button data-season="summer" class="season-btn glass-chip rounded-xl px-3 py-1.5 text-xs font-semibold whitespace-nowrap cursor-pointer">
+          ☀️ Summer
+        </button>
+        <button data-season="monsoon" class="season-btn glass-chip rounded-xl px-3 py-1.5 text-xs font-semibold whitespace-nowrap cursor-pointer">
+          🌧️ Monsoon (Clean)
+        </button>
+      </div>
+
+      <!-- Pollutant Selector Strip -->
+      <div class="glass-panel rounded-2xl p-1.5 pointer-events-auto flex items-center gap-1 overflow-x-auto no-scrollbar max-w-full">
+        <span class="text-[11px] font-semibold text-slate-400 px-2 shrink-0">Metric:</span>
+        <button data-metric="aqi" class="metric-btn glass-chip active rounded-xl px-2.5 py-1.5 text-xs font-semibold whitespace-nowrap cursor-pointer">
+          Overall AQI
+        </button>
+        <button data-metric="pm25" class="metric-btn glass-chip rounded-xl px-2.5 py-1.5 text-xs font-semibold whitespace-nowrap cursor-pointer">
+          PM2.5
+        </button>
+        <button data-metric="pm10" class="metric-btn glass-chip rounded-xl px-2.5 py-1.5 text-xs font-semibold whitespace-nowrap cursor-pointer">
+          PM10
+        </button>
+        <button data-metric="no2" class="metric-btn glass-chip rounded-xl px-2.5 py-1.5 text-xs font-semibold whitespace-nowrap cursor-pointer">
+          NO₂
+        </button>
+        <button data-metric="co" class="metric-btn glass-chip rounded-xl px-2.5 py-1.5 text-xs font-semibold whitespace-nowrap cursor-pointer">
+          CO
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Left / Floating AQI Legend & City Average Summary (Desktop & Tablet) -->
+  <div class="hidden sm:flex fixed left-4 bottom-4 z-10 flex-col gap-2.5 pointer-events-none w-64">
+    <!-- City-Wide Live KPI Card -->
+    <div class="glass-panel rounded-2xl p-3.5 pointer-events-auto">
+      <div class="flex items-center justify-between mb-1">
+        <span class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">City-Wide Average</span>
+        <span id="city-status-badge" class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-500/20 text-red-300 border border-red-500/40">
+          Unhealthy
+        </span>
+      </div>
+      <div class="flex items-baseline gap-2">
+        <span id="city-avg-val" class="text-3xl font-extrabold text-white">182</span>
+        <span id="city-avg-unit" class="text-xs font-medium text-slate-400">AQI Index</span>
+      </div>
+      <p id="season-insight-text" class="text-[11px] text-slate-300 mt-1.5 leading-relaxed">
+        Thermal inversions trap fine particulates near surface corridors.
+      </p>
+    </div>
+
+    <!-- AQI Color Scale Legend -->
+    <div class="glass-panel rounded-2xl p-3.5 pointer-events-auto">
+      <p class="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-2">AQI Severity Scale</p>
+      <div class="space-y-1.5 text-xs">
+        <div class="flex items-center justify-between">
+          <span class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>Good</span>
+          <span class="text-slate-400 font-mono text-[11px]">0 – 50</span>
+        </div>
+        <div class="flex items-center justify-between">
+          <span class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-yellow-400"></span>Moderate</span>
+          <span class="text-slate-400 font-mono text-[11px]">51 – 100</span>
+        </div>
+        <div class="flex items-center justify-between">
+          <span class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-orange-500"></span>Sensitive</span>
+          <span class="text-slate-400 font-mono text-[11px]">101 – 150</span>
+        </div>
+        <div class="flex items-center justify-between">
+          <span class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-red-500"></span>Unhealthy</span>
+          <span class="text-slate-400 font-mono text-[11px]">151 – 250</span>
+        </div>
+        <div class="flex items-center justify-between">
+          <span class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-purple-500"></span>Hazardous</span>
+          <span class="text-slate-400 font-mono text-[11px]">250+</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right / Bottom Station Inspector Card & Quick Station Selector -->
+  <div class="fixed bottom-3 left-3 right-3 sm:left-auto sm:right-4 sm:bottom-4 sm:w-96 z-10 pointer-events-none flex flex-col gap-2">
+    <!-- Quick Station Selector Pills -->
+    <div class="glass-panel rounded-2xl p-1.5 pointer-events-auto flex items-center gap-1 overflow-x-auto no-scrollbar">
+      <button data-station="0" class="station-pill glass-chip active rounded-xl px-2.5 py-1 text-[11px] font-semibold whitespace-nowrap cursor-pointer">Industrial</button>
+      <button data-station="1" class="station-pill glass-chip rounded-xl px-2.5 py-1 text-[11px] font-semibold whitespace-nowrap cursor-pointer">Highway</button>
+      <button data-station="2" class="station-pill glass-chip rounded-xl px-2.5 py-1 text-[11px] font-semibold whitespace-nowrap cursor-pointer">City Center</button>
+      <button data-station="3" class="station-pill glass-chip rounded-xl px-2.5 py-1 text-[11px] font-semibold whitespace-nowrap cursor-pointer">Residential</button>
+      <button data-station="4" class="station-pill glass-chip rounded-xl px-2.5 py-1 text-[11px] font-semibold whitespace-nowrap cursor-pointer">Riverside</button>
+      <button data-station="5" class="station-pill glass-chip rounded-xl px-2.5 py-1 text-[11px] font-semibold whitespace-nowrap cursor-pointer">Green Park</button>
+    </div>
+
+    <!-- Station Details Inspection Card -->
+    <div id="station-card" class="glass-panel rounded-2xl p-4 pointer-events-auto transition-all duration-300">
+      <div class="flex items-start justify-between gap-2 mb-2.5">
+        <div>
+          <div class="flex items-center gap-1.5">
+            <span id="st-code" class="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-slate-800 text-sky-400 border border-slate-700">STN-01</span>
+            <span id="st-zone-type" class="text-[11px] font-medium text-slate-400">Heavy Manufacturing Belt</span>
+          </div>
+          <h2 id="st-name" class="text-base sm:text-lg font-bold text-white mt-0.5">Industrial Zone</h2>
+        </div>
+
+        <div class="text-right shrink-0">
+          <div id="st-main-val" class="text-2xl sm:text-3xl font-extrabold text-purple-400 leading-none">278</div>
+          <div id="st-category" class="text-[10px] font-bold uppercase tracking-wider mt-1 px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/40 inline-block">
+            Hazardous
+          </div>
+        </div>
+      </div>
+
+      <!-- 4 Pollutant Sub-Metrics Grid -->
+      <div class="grid grid-cols-4 gap-1.5 mb-3">
+        <div class="bg-slate-900/70 border border-slate-800 rounded-xl p-2 text-center">
+          <div class="text-[10px] text-slate-400 font-semibold">PM2.5</div>
+          <div id="val-pm25" class="text-xs sm:text-sm font-bold text-white mt-0.5">184</div>
+          <div class="text-[9px] text-slate-500">μg/m³</div>
+        </div>
+        <div class="bg-slate-900/70 border border-slate-800 rounded-xl p-2 text-center">
+          <div class="text-[10px] text-slate-400 font-semibold">PM10</div>
+          <div id="val-pm10" class="text-xs sm:text-sm font-bold text-white mt-0.5">312</div>
+          <div class="text-[9px] text-slate-500">μg/m³</div>
+        </div>
+        <div class="bg-slate-900/70 border border-slate-800 rounded-xl p-2 text-center">
+          <div class="text-[10px] text-slate-400 font-semibold">NO₂</div>
+          <div id="val-no2" class="text-xs sm:text-sm font-bold text-white mt-0.5">92</div>
+          <div class="text-[9px] text-slate-500">μg/m³</div>
+        </div>
+        <div class="bg-slate-900/70 border border-slate-800 rounded-xl p-2 text-center">
+          <div class="text-[10px] text-slate-400 font-semibold">CO</div>
+          <div id="val-co" class="text-xs sm:text-sm font-bold text-white mt-0.5">2.8</div>
+          <div class="text-[9px] text-slate-500">mg/m³</div>
+        </div>
+      </div>
+
+      <!-- Dominant Pollutant & Urban Planner Action -->
+      <div class="bg-slate-900/60 border border-slate-800/90 rounded-xl p-2.5 text-xs">
+        <div class="flex items-center justify-between mb-1">
+          <span class="text-slate-400 font-medium">Dominant Pollutant:</span>
+          <span id="st-dominant" class="font-bold text-amber-400">PM2.5 &amp; Industrial SO₂/PM10</span>
+        </div>
+        <p id="st-recommendation" class="text-[11px] text-slate-300 leading-snug">
+          <strong class="text-teal-400">Planner Action:</strong> Enforce stack scrubbers, restrict night-time freight idling, and expand perimeter vegetative buffers.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // =========================================================================
+    // 1. DATASET: DA-013 AIR QUALITY & POLLUTION PATTERN ANALYSIS (6 STATIONS)
+    // =========================================================================
+    const SEASONS = {
+      winter: {
+        label: 'Winter (Peak Pollution)',
+        smogOpacity: 0.58,
+        fogDensity: 0.024,
+        insight: 'Thermal inversions and low wind speeds trap particulates near surface corridors (3.4× WHO limit).'
+      },
+      postMonsoon: {
+        label: 'Post-Monsoon',
+        smogOpacity: 0.42,
+        fogDensity: 0.017,
+        insight: 'Dropping temperatures and stagnant air trigger rapid post-October particulate accumulation.'
+      },
+      summer: {
+        label: 'Summer',
+        smogOpacity: 0.26,
+        fogDensity: 0.011,
+        insight: 'Higher mixing heights disperse fine smoke, but dry winds elevate coarse PM10 dust.'
+      },
+      monsoon: {
+        label: 'Monsoon (Cleanest)',
+        smogOpacity: 0.10,
+        fogDensity: 0.006,
+        insight: 'Frequent rainfall washes out suspended aerosols, keeping 82% of readings in safe limits.'
+      }
+    };
+
+    const STATIONS_DATA = [
+      {
+        id: 'STN-01',
+        name: 'Industrial Zone',
+        zoneType: 'Heavy Manufacturing Belt',
+        x: -7.5,
+        z: -6.5,
+        dominant: 'PM2.5 & Coarse PM10',
+        recommendation: 'Enforce stack emission scrubbers, restrict diesel freight idling, and plant multi-tier green belts.',
+        readings: {
+          winter:      { aqi: 278, pm25: 184, pm10: 312, no2: 92, co: 2.8 },
+          postMonsoon: { aqi: 224, pm25: 146, pm10: 258, no2: 78, co: 2.3 },
+          summer:      { aqi: 158, pm25: 94,  pm10: 215, no2: 61, co: 1.7 },
+          monsoon:     { aqi: 86,  pm25: 44,  pm10: 98,  no2: 39, co: 1.1 }
+        }
+      },
+      {
+        id: 'STN-02',
+        name: 'Highway Junction',
+        zoneType: 'Arterial Transit Corridor',
+        x: 7.0,
+        z: -5.5,
+        dominant: 'NO₂ & Vehicular Exhaust',
+        recommendation: 'Introduce peak-hour Low-Emission Zones (08:00–10:00) and synchronize traffic signal corridors.',
+        readings: {
+          winter:      { aqi: 236, pm25: 152, pm10: 264, no2: 108, co: 3.1 },
+          postMonsoon: { aqi: 189, pm25: 121, pm10: 218, no2: 91,  co: 2.5 },
+          summer:      { aqi: 138, pm25: 82,  pm10: 176, no2: 74,  co: 1.9 },
+          monsoon:     { aqi: 74,  pm25: 38,  pm10: 84,  no2: 46,  co: 1.2 }
+        }
+      },
+      {
+        id: 'STN-03',
+        name: 'City Center',
+        zoneType: 'Commercial & Retail Core',
+        x: 0.0,
+        z: 0.0,
+        dominant: 'PM2.5 & Commercial NO₂',
+        recommendation: 'Expand pedestrian-only zones, promote EV last-mile delivery, and ban backup diesel generators.',
+        readings: {
+          winter:      { aqi: 198, pm25: 128, pm10: 221, no2: 82, co: 2.2 },
+          postMonsoon: { aqi: 162, pm25: 104, pm10: 186, no2: 70, co: 1.8 },
+          summer:      { aqi: 118, pm25: 68,  pm10: 152, no2: 55, co: 1.4 },
+          monsoon:     { aqi: 62,  pm25: 31,  pm10: 71,  no2: 34, co: 0.9 }
+        }
+      },
+      {
+        id: 'STN-04',
+        name: 'Residential North',
+        zoneType: 'High-Density Housing Ward',
+        x: -6.5,
+        z: 6.5,
+        dominant: 'PM2.5 (Biomass & Heating)',
+        recommendation: 'Deploy neighborhood micro-sensors and issue early winter health advisories for schools.',
+        readings: {
+          winter:      { aqi: 164, pm25: 109, pm10: 182, no2: 54, co: 1.6 },
+          postMonsoon: { aqi: 134, pm25: 88,  pm10: 154, no2: 47, co: 1.4 },
+          summer:      { aqi: 92,  pm25: 51,  pm10: 126, no2: 36, co: 1.0 },
+          monsoon:     { aqi: 46,  pm25: 22,  pm10: 54,  no2: 21, co: 0.6 }
+        }
+      },
+      {
+        id: 'STN-05',
+        name: 'Riverside',
+        zoneType: 'Open Water Ventilation Corridor',
+        x: 7.5,
+        z: 5.5,
+        dominant: 'Moderate PM10',
+        recommendation: 'Protect riparian wind corridors from high-rise obstruction to preserve natural city ventilation.',
+        readings: {
+          winter:      { aqi: 128, pm25: 79,  pm10: 146, no2: 42, co: 1.2 },
+          postMonsoon: { aqi: 104, pm25: 64,  pm10: 122, no2: 37, co: 1.0 },
+          summer:      { aqi: 76,  pm25: 41,  pm10: 98,  no2: 29, co: 0.8 },
+          monsoon:     { aqi: 38,  pm25: 18,  pm10: 44,  no2: 17, co: 0.5 }
+        }
+      },
+      {
+        id: 'STN-06',
+        name: 'Green Park South',
+        zoneType: 'Urban Forest & Ecological Reserve',
+        x: 0.5,
+        z: 8.5,
+        dominant: 'Clean Baseline Reference',
+        recommendation: 'Maintain canopy density as a benchmark clean-air zone and replicate urban forestry elsewhere.',
+        readings: {
+          winter:      { aqi: 94,  pm25: 53,  pm10: 104, no2: 28, co: 0.8 },
+          postMonsoon: { aqi: 78,  pm25: 42,  pm10: 88,  no2: 24, co: 0.7 },
+          summer:      { aqi: 54,  pm25: 28,  pm10: 66,  no2: 19, co: 0.5 },
+          monsoon:     { aqi: 28,  pm25: 13,  pm10: 32,  no2: 12, co: 0.3 }
+        }
+      }
+    ];
+
+    // Helper: Convert AQI or normalized value into severity color & label
+    function getSeverityInfo(aqiValue) {
+      if (aqiValue <= 50) {
+        return {
+          label: 'Good',
+          hex: 0x10b981,
+          cssText: 'text-emerald-400',
+          badgeClass: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+        };
+      } else if (aqiValue <= 100) {
+        return {
+          label: 'Moderate',
+          hex: 0xfacc15,
+          cssText: 'text-yellow-400',
+          badgeClass: 'bg-yellow-500/20 text-yellow-300 border-yellow-500/40'
+        };
+      } else if (aqiValue <= 150) {
+        return {
+          label: 'Sensitive',
+          hex: 0xf97316,
+          cssText: 'text-orange-400',
+          badgeClass: 'bg-orange-500/20 text-orange-300 border-orange-500/40'
+        };
+      } else if (aqiValue <= 250) {
+        return {
+          label: 'Unhealthy',
+          hex: 0xef4444,
+          cssText: 'text-red-400',
+          badgeClass: 'bg-red-500/20 text-red-300 border-red-500/40'
+        };
+      } else {
+        return {
+          label: 'Hazardous',
+          hex: 0xa855f7,
+          cssText: 'text-purple-400',
+          badgeClass: 'bg-purple-500/20 text-purple-300 border-purple-500/40'
+        };
+      }
+    }
+
+    // Normalize any metric to a 0-300 scale for 3D pillar height & color parity
+    function getNormalizedScore(reading, metric) {
+      switch (metric) {
+        case 'pm25': return reading.pm25 * 1.5;
+        case 'pm10': return reading.pm10 * 0.9;
+        case 'no2':  return reading.no2 * 2.4;
+        case 'co':   return reading.co * 85;
+        case 'aqi':
+        default:     return reading.aqi;
+      }
+    }
+
+    // =========================================================================
+    // 2. THREE.JS SCENE SETUP & URBAN ENVIRONMENT
+    // =========================================================================
+    let scene, camera, renderer, controls;
+    let stationMeshes = [];
+    let clickableObjects = [];
+    let selectionRing;
+    let smogParticles, smogMaterial;
+    let trafficDots = [];
+
+    let currentSeason = 'winter';
+    let currentMetric = 'aqi';
+    let selectedStationIndex = 0;
+
+    const DEFAULT_CAM_POS = new THREE.Vector3(16, 15, 19);
+    const DEFAULT_CAM_TARGET = new THREE.Vector3(0, 1.5, 1);
+
+    function initScene() {
+      const container = document.getElementById('canvas-container');
+
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x060b14);
+      scene.fog = new THREE.FogExp2(0x060b14, SEASONS[currentSeason].fogDensity);
+
+      camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 200);
+      camera.position.copy(DEFAULT_CAM_POS);
+
+      renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      container.appendChild(renderer.domElement);
+
+      // OrbitControls for mouse & mobile touch
+      controls = new THREE.OrbitControls(camera, renderer.domElement);
+      controls.target.copy(DEFAULT_CAM_TARGET);
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.06;
+      controls.maxPolarAngle = Math.PI / 2.15;
+      controls.minDistance = 8;
+      controls.maxDistance = 42;
+      controls.autoRotate = true;
+      controls.autoRotateSpeed = 0.75;
+
+      // Lighting
+      const ambientLight = new THREE.AmbientLight(0x94a3b8, 0.75);
+      scene.add(ambientLight);
+
+      const dirLight = new THREE.DirectionalLight(0xf8fafc, 1.1);
+      dirLight.position.set(18, 28, 16);
+      dirLight.castShadow = true;
+      dirLight.shadow.mapSize.width = 1024;
+      dirLight.shadow.mapSize.height = 1024;
+      dirLight.shadow.camera.near = 5;
+      dirLight.shadow.camera.far = 70;
+      const d = 18;
+      dirLight.shadow.camera.left = -d;
+      dirLight.shadow.camera.right = d;
+      dirLight.shadow.camera.top = d;
+      dirLight.shadow.camera.bottom = -d;
+      scene.add(dirLight);
+
+      const rimLight = new THREE.DirectionalLight(0x38bdf8, 0.45);
+      rimLight.position.set(-16, 12, -16);
+      scene.add(rimLight);
+
+      buildCityEnvironment();
+      buildMonitoringStations();
+      buildSmogParticles();
+      setupInteractions();
+
+      updateVisualization(true);
+    }
+
+    // Build stylized 3D urban terrain, roads, river, park, industrial stacks & buildings
+    function buildCityEnvironment() {
+      // Base Ground Platform
+      const baseGeo = new THREE.BoxGeometry(26, 0.8, 26);
+      const baseMat = new THREE.MeshStandardMaterial({
+        color: 0x0f172a,
+        roughness: 0.85,
+        metalness: 0.15
+      });
+      const baseMesh = new THREE.Mesh(baseGeo, baseMat);
+      baseMesh.position.y = -0.4;
+      baseMesh.receiveShadow = true;
+      scene.add(baseMesh);
+
+      // Subtle architectural grid overlay
+      const gridHelper = new THREE.GridHelper(25, 25, 0x1e293b, 0x162032);
+      gridHelper.position.y = 0.01;
+      scene.add(gridHelper);
+
+      // River Strip on the East/South-East edge
+      const riverGeo = new THREE.PlaneGeometry(4.2, 25);
+      const riverMat = new THREE.MeshStandardMaterial({
+        color: 0x0284c7,
+        emissive: 0x0369a1,
+        emissiveIntensity: 0.35,
+        roughness: 0.2,
+        metalness: 0.6
+      });
+      const river = new THREE.Mesh(riverGeo, riverMat);
+      river.rotation.x = -Math.PI / 2;
+      river.position.set(10.2, 0.02, 0);
+      scene.add(river);
+
+      // Green Park Zone (South)
+      const parkGeo = new THREE.BoxGeometry(7.5, 0.08, 6.0);
+      const parkMat = new THREE.MeshStandardMaterial({
+        color: 0x065f46,
+        roughness: 0.9
+      });
+      const parkMesh = new THREE.Mesh(parkGeo, parkMat);
+      parkMesh.position.set(0.5, 0.04, 8.5);
+      parkMesh.receiveShadow = true;
+      scene.add(parkMesh);
+
+      // Stylized Trees in Green Park
+      const treeTrunkMat = new THREE.MeshStandardMaterial({ color: 0x78350f });
+      const treeCrownMat = new THREE.MeshStandardMaterial({ color: 0x10b981, roughness: 0.8 });
+      const treeCoords = [
+        [-2.2, 6.8], [-1.5, 9.8], [2.4, 7.0], [3.1, 9.6], [-2.5, 8.5], [2.8, 8.3]
+      ];
+      treeCoords.forEach(([tx, tz]) => {
+        const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.1, 0.4, 6), treeTrunkMat);
+        trunk.position.set(tx, 0.25, tz);
+        scene.add(trunk);
+
+        const crown = new THREE.Mesh(new THREE.ConeGeometry(0.42, 1.0, 7), treeCrownMat);
+        crown.position.set(tx, 0.85, tz);
+        crown.castShadow = true;
+        scene.add(crown);
+      });
+
+      // Road Network (Cross & Ring Arterial Roads)
+      const roadMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.8 });
+      const road1 = new THREE.Mesh(new THREE.PlaneGeometry(24, 1.2), roadMat);
+      road1.rotation.x = -Math.PI / 2;
+      road1.position.set(0, 0.025, -3.0);
+      scene.add(road1);
+
+      const road2 = new THREE.Mesh(new THREE.PlaneGeometry(24, 1.2), roadMat);
+      road2.rotation.x = -Math.PI / 2;
+      road2.position.set(0, 0.025, 3.5);
+      scene.add(road2);
+
+      const road3 = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 24), roadMat);
+      road3.rotation.x = -Math.PI / 2;
+      road3.position.set(-3.2, 0.025, 0);
+      scene.add(road3);
+
+      const road4 = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 24), roadMat);
+      road4.rotation.x = -Math.PI / 2;
+      road4.position.set(4.2, 0.025, 0);
+      scene.add(road4);
+
+      // Animated Traffic Pulse Dots on Roads
+      const dotGeo = new THREE.BoxGeometry(0.28, 0.1, 0.16);
+      const dotMat = new THREE.MeshBasicMaterial({ color: 0xfbbf24 });
+      for (let i = 0; i < 14; i++) {
+        const dot = new THREE.Mesh(dotGeo, dotMat);
+        const isHorizontal = i % 2 === 0;
+        dot.position.set(
+          isHorizontal ? (Math.random() * 20 - 10) : (i % 4 === 1 ? -3.2 : 4.2),
+          0.08,
+          isHorizontal ? (i % 4 === 0 ? -3.0 : 3.5) : (Math.random() * 20 - 10)
+        );
+        if (!isHorizontal) dot.rotation.y = Math.PI / 2;
+        scene.add(dot);
+        trafficDots.push({
+          mesh: dot,
+          isHorizontal,
+          speed: (0.04 + Math.random() * 0.04) * (Math.random() > 0.5 ? 1 : -1)
+        });
+      }
+
+      // Stylized City Buildings (Low-Poly Architectural Blocks)
+      const buildingMat = new THREE.MeshStandardMaterial({
+        color: 0x1e293b,
+        roughness: 0.55,
+        metalness: 0.35
+      });
+      const industrialMat = new THREE.MeshStandardMaterial({
+        color: 0x334155,
+        roughness: 0.65,
+        metalness: 0.4
+      });
+
+      const cityBlocks = [
+        // City Center Towers
+        { x: -1.4, z: -0.8, w: 1.3, h: 3.2, d: 1.3, mat: buildingMat },
+        { x: 1.6,  z: -1.1, w: 1.4, h: 3.8, d: 1.2, mat: buildingMat },
+        { x: -1.3, z: 1.5,  w: 1.2, h: 2.5, d: 1.4, mat: buildingMat },
+        { x: 1.8,  z: 1.4,  w: 1.3, h: 2.9, d: 1.3, mat: buildingMat },
+        // Highway Junction Commercial
+        { x: 6.2,  z: -8.2, w: 1.6, h: 2.2, d: 1.5, mat: buildingMat },
+        { x: 6.0,  z: -1.2, w: 1.5, h: 2.6, d: 1.4, mat: buildingMat },
+        // Residential North Low-Rise
+        { x: -8.5, z: 5.2,  w: 1.4, h: 1.3, d: 1.4, mat: buildingMat },
+        { x: -5.2, z: 8.6,  w: 1.5, h: 1.4, d: 1.3, mat: buildingMat },
+        { x: -8.4, z: 8.4,  w: 1.3, h: 1.2, d: 1.5, mat: buildingMat },
+        // Industrial Zone Warehouses
+        { x: -9.5, z: -8.5, w: 2.2, h: 1.6, d: 1.8, mat: industrialMat },
+        { x: -5.5, z: -9.0, w: 2.0, h: 1.4, d: 1.6, mat: industrialMat }
+      ];
+
+      cityBlocks.forEach((b) => {
+        const geo = new THREE.BoxGeometry(b.w, b.h, b.d);
+        const mesh = new THREE.Mesh(geo, b.mat);
+        mesh.position.set(b.x, b.h / 2, b.z);
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        scene.add(mesh);
+      });
+
+      // Industrial Smokestacks near STN-01
+      const stackCoords = [[-9.8, -7.8], [-9.2, -7.8]];
+      stackCoords.forEach(([sx, sz]) => {
+        const stack = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.18, 0.26, 3.0, 12),
+          industrialMat
+        );
+        stack.position.set(sx, 1.5, sz);
+        stack.castShadow = true;
+        scene.add(stack);
+      });
+    }
+
+    // Create text sprite label above each 3D station pillar
+    function createLabelSprite(stationName, valueText, colorHex) {
+      const canvas = document.createElement('canvas');
+      canvas.width = 320;
+      canvas.height = 110;
+      const ctx = canvas.getContext('2d');
+
+      // Pill background
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.88)';
+      ctx.beginPath();
+      ctx.roundRect(10, 10, 300, 90, 20);
+      ctx.fill();
+
+      // Border stroke matching AQI severity color
+      const hexStr = '#' + colorHex.toString(16).padStart(6, '0');
+      ctx.strokeStyle = hexStr;
+      ctx.lineWidth = 4;
+      ctx.stroke();
+
+      // Station Name
+      ctx.fillStyle = '#e2e8f0';
+      ctx.font = 'bold 22px Inter, Arial, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(stationName, 160, 46);
+
+      // Metric Value
+      ctx.fillStyle = hexStr;
+      ctx.font = '800 28px Inter, Arial, sans-serif';
+      ctx.fillText(valueText, 160, 82);
+
+      const texture = new THREE.CanvasTexture(canvas);
+      const spriteMat = new THREE.SpriteMaterial({ map: texture, transparent: true });
+      const sprite = new THREE.Sprite(spriteMat);
+      sprite.scale.set(3.4, 1.16, 1);
+      return sprite;
+    }
+
+    // Build the 6 Interactive 3D Monitoring Station Pillars
+    function buildMonitoringStations() {
+      // Active selection ring on ground
+      const selGeo = new THREE.RingGeometry(1.15, 1.45, 32);
+      const selMat = new THREE.MeshBasicMaterial({
+        color: 0x38bdf8,
+        side: THREE.DoubleSide,
+        transparent: true,
+        opacity: 0.9
+      });
+      selectionRing = new THREE.Mesh(selGeo, selMat);
+      selectionRing.rotation.x = -Math.PI / 2;
+      selectionRing.position.y = 0.06;
+      scene.add(selectionRing);
+
+      STATIONS_DATA.forEach((st, idx) => {
+        const group = new THREE.Group();
+        group.position.set(st.x, 0, st.z);
+
+        // Sensor Base Pad
+        const padGeo = new THREE.CylinderGeometry(0.95, 1.05, 0.22, 24);
+        const padMat = new THREE.MeshStandardMaterial({
+          color: 0x334155,
+          metalness: 0.6,
+          roughness: 0.3
+        });
+        const pad = new THREE.Mesh(padGeo, padMat);
+        pad.position.y = 0.11;
+        pad.receiveShadow = true;
+        pad.userData = { stationIndex: idx };
+        group.add(pad);
+        clickableObjects.push(pad);
+
+        // Glowing 3D Data Pillar (unit height 1, scaled dynamically)
+        const pillarGeo = new THREE.CylinderGeometry(0.55, 0.65, 1, 24);
+        // Shift origin to bottom so scaling grows upward cleanly
+        pillarGeo.translate(0, 0.5, 0);
+        const pillarMat = new THREE.MeshStandardMaterial({
+          color: 0xef4444,
+          emissive: 0xef4444,
+          emissiveIntensity: 0.55,
+          roughness: 0.25,
+          metalness: 0.2,
+          transparent: true,
+          opacity: 0.92
+        });
+        const pillar = new THREE.Mesh(pillarGeo, pillarMat);
+        pillar.position.y = 0.22;
+        pillar.castShadow = true;
+        pillar.userData = { stationIndex: idx };
+        group.add(pillar);
+        clickableObjects.push(pillar);
+
+        // Outer translucent energy aura cylinder
+        const auraGeo = new THREE.CylinderGeometry(0.76, 0.84, 1, 24);
+        auraGeo.translate(0, 0.5, 0);
+        const auraMat = new THREE.MeshBasicMaterial({
+          color: 0xef4444,
+          transparent: true,
+          opacity: 0.18,
+          depthWrite: false
+        });
+        const aura = new THREE.Mesh(auraGeo, auraMat);
+        aura.position.y = 0.22;
+        group.add(aura);
+
+        // Floating Label Sprite
+        const sprite = createLabelSprite(st.name, 'AQI 200', 0xef4444);
+        sprite.position.y = 6.5;
+        sprite.userData = { stationIndex: idx };
+        group.add(sprite);
+        clickableObjects.push(sprite);
+
+        scene.add(group);
+
+        stationMeshes.push({
+          group,
+          pillar,
+          aura,
+          sprite,
+          currentHeight: 2.0,
+          targetHeight: 2.0,
+          currentColor: new THREE.Color(0xef4444),
+          targetColor: new THREE.Color(0xef4444)
+        });
+      });
+    }
+
+    // Build atmospheric floating smog/particulate cloud
+    function buildSmogParticles() {
+      const count = 900;
+      const positions = new Float32Array(count * 3);
+      for (let i = 0; i < count; i++) {
+        positions[i * 3] = (Math.random() - 0.5) * 26;
+        positions[i * 3 + 1] = 0.4 + Math.random() * 8.5;
+        positions[i * 3 + 2] = (Math.random() - 0.5) * 26;
+      }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+      smogMaterial = new THREE.PointsMaterial({
+        color: 0xfbbf24,
+        size: 0.14,
+        transparent: true,
+        opacity: SEASONS[currentSeason].smogOpacity,
+        depthWrite: false
+      });
+
+      smogParticles = new THREE.Points(geo, smogMaterial);
+      scene.add(smogParticles);
+    }
+
+    // =========================================================================
+    // 3. STATE UPDATES & UI SYNCHRONIZATION
+    // =========================================================================
+    function updateVisualization(immediate = false) {
+      const seasonInfo = SEASONS[currentSeason];
+
+      // Update scene fog & smog opacity
+      scene.fog.density = seasonInfo.fogDensity;
+      smogMaterial.opacity = seasonInfo.smogOpacity;
+
+      let totalCityScore = 0;
+
+      STATIONS_DATA.forEach((st, idx) => {
+        const reading = st.readings[currentSeason];
+        const normScore = getNormalizedScore(reading, currentMetric);
+        totalCityScore += normScore;
+
+        const severity = getSeverityInfo(normScore);
+        // Map score (0..300) to 3D height (1.2 .. 8.2 units)
+        const targetH = Math.max(1.2, Math.min(8.5, (normScore / 300) * 7.8 + 0.8));
+
+        const stObj = stationMeshes[idx];
+        stObj.targetHeight = targetH;
+        stObj.targetColor.setHex(severity.hex);
+
+        if (immediate) {
+          stObj.currentHeight = targetH;
+          stObj.pillar.scale.y = targetH;
+          stObj.aura.scale.y = targetH * 1.04;
+          stObj.pillar.material.color.setHex(severity.hex);
+          stObj.pillar.material.emissive.setHex(severity.hex);
+          stObj.aura.material.color.setHex(severity.hex);
+          stObj.sprite.position.y = targetH + 1.15;
+        }
+
+        // Format display string for 3D sprite label
+        let displayStr = '';
+        if (currentMetric === 'aqi') displayStr = `AQI ${reading.aqi}`;
+        else if (currentMetric === 'pm25') displayStr = `PM2.5: ${reading.pm25}`;
+        else if (currentMetric === 'pm10') displayStr = `PM10: ${reading.pm10}`;
+        else if (currentMetric === 'no2') displayStr = `NO₂: ${reading.no2}`;
+        else if (currentMetric === 'co') displayStr = `CO: ${reading.co}`;
+
+        // Refresh sprite texture
+        stObj.group.remove(stObj.sprite);
+        clickableObjects = clickableObjects.filter((obj) => obj !== stObj.sprite);
+
+        const newSprite = createLabelSprite(st.name, displayStr, severity.hex);
+        newSprite.position.y = stObj.currentHeight + 1.15;
+        newSprite.userData = { stationIndex: idx };
+        stObj.group.add(newSprite);
+        stObj.sprite = newSprite;
+        clickableObjects.push(newSprite);
+      });
+
+      // Update City-Wide Average Card
+      const avgNorm = Math.round(totalCityScore / STATIONS_DATA.length);
+      const citySev = getSeverityInfo(avgNorm);
+      const avgAqiRaw = Math.round(
+        STATIONS_DATA.reduce((sum, s) => sum + s.readings[currentSeason].aqi, 0) / STATIONS_DATA.length
+      );
+
+      document.getElementById('city-avg-val').textContent = avgAqiRaw;
+      const badgeEl = document.getElementById('city-status-badge');
+      badgeEl.textContent = citySev.label;
+      badgeEl.className = `text-[10px] font-bold px-2 py-0.5 rounded-full border ${citySev.badgeClass}`;
+      document.getElementById('season-insight-text').textContent = seasonInfo.insight;
+
+      updateSelectedStationCard();
+    }
+
+    function updateSelectedStationCard() {
+      const st = STATIONS_DATA[selectedStationIndex];
+      const reading = st.readings[currentSeason];
+      const normScore = getNormalizedScore(reading, currentMetric);
+      const severity = getSeverityInfo(normScore);
+
+      // Position 3D ground selection ring under chosen station
+      selectionRing.position.x = st.x;
+      selectionRing.position.z = st.z;
+      selectionRing.material.color.setHex(severity.hex);
+
+      // Update Station Pills active state
+      document.querySelectorAll('.station-pill').forEach((btn) => {
+        const idx = parseInt(btn.getAttribute('data-station'), 10);
+        btn.classList.toggle('active', idx === selectedStationIndex);
+      });
+
+      // Populate Details Card
+      document.getElementById('st-code').textContent = st.id;
+      document.getElementById('st-zone-type').textContent = st.zoneType;
+      document.getElementById('st-name').textContent = st.name;
+
+      // Primary metric readout
+      let mainVal = reading.aqi;
+      if (currentMetric === 'pm25') mainVal = reading.pm25;
+      else if (currentMetric === 'pm10') mainVal = reading.pm10;
+      else if (currentMetric === 'no2') mainVal = reading.no2;
+      else if (currentMetric === 'co') mainVal = reading.co;
+
+      const mainValEl = document.getElementById('st-main-val');
+      mainValEl.textContent = mainVal;
+      mainValEl.className = `text-2xl sm:text-3xl font-extrabold leading-none ${severity.cssText}`;
+
+      const catEl = document.getElementById('st-category');
+      catEl.textContent = severity.label;
+      catEl.className = `text-[10px] font-bold uppercase tracking-wider mt-1 px-2 py-0.5 rounded-full border inline-block ${severity.badgeClass}`;
+
+      document.getElementById('val-pm25').textContent = reading.pm25;
+      document.getElementById('val-pm10').textContent = reading.pm10;
+      document.getElementById('val-no2').textContent = reading.no2;
+      document.getElementById('val-co').textContent = reading.co;
+
+      document.getElementById('st-dominant').textContent = st.dominant;
+      document.getElementById('st-recommendation').innerHTML =
+        `<strong class="text-teal-400">Planner Action:</strong> ${st.recommendation}`;
+    }
+
+    // =========================================================================
+    // 4. EVENT LISTENERS (RAYCASTING TAP/CLICK, BUTTONS, RESIZE)
+    // =========================================================================
+    function setupInteractions() {
+      const raycaster = new THREE.Raycaster();
+      const pointer = new THREE.Vector2();
+      let pointerDownPos = { x: 0, y: 0 };
+
+      const domEl = renderer.domElement;
+
+      domEl.addEventListener('pointerdown', (e) => {
+        pointerDownPos = { x: e.clientX, y: e.clientY };
+      });
+
+      domEl.addEventListener('pointerup', (e) => {
+        // Distinguish clean tap/click from camera drag
+        const dist = Math.hypot(e.clientX - pointerDownPos.x, e.clientY - pointerDownPos.y);
+        if (dist > 6) return;
+
+        const rect = domEl.getBoundingClientRect();
+        pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+        pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+
+        raycaster.setFromCamera(pointer, camera);
+        const intersects = raycaster.intersectObjects(clickableObjects, false);
+
+        if (intersects.length > 0) {
+          const hitIdx = intersects[0].object.userData.stationIndex;
+          if (typeof hitIdx === 'number') {
+            selectedStationIndex = hitIdx;
+            updateSelectedStationCard();
+          }
+        }
+      });
+
+      // Season filter buttons
+      document.querySelectorAll('.season-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.season-btn').forEach((b) => b.classList.remove('active'));
+          btn.classList.add('active');
+          currentSeason = btn.getAttribute('data-season');
+          updateVisualization(false);
+        });
+      });
+
+      // Pollutant metric buttons
+      document.querySelectorAll('.metric-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.metric-btn').forEach((b) => b.classList.remove('active'));
+          btn.classList.add('active');
+          currentMetric = btn.getAttribute('data-metric');
+          updateVisualization(false);
+        });
+      });
+
+      // Quick station selector pills
+      document.querySelectorAll('.station-pill').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          selectedStationIndex = parseInt(btn.getAttribute('data-station'), 10);
+          updateSelectedStationCard();
+        });
+      });
+
+      // Auto-Rotate toggle
+      const autoBtn = document.getElementById('btn-autorotate');
+      autoBtn.addEventListener('click', () => {
+        controls.autoRotate = !controls.autoRotate;
+        autoBtn.classList.toggle('active', controls.autoRotate);
+      });
+
+      // Reset Camera View
+      document.getElementById('btn-reset-cam').addEventListener('click', () => {
+        camera.position.copy(DEFAULT_CAM_POS);
+        controls.target.copy(DEFAULT_CAM_TARGET);
+        controls.update();
+      });
+
+      // Responsive Resize
+      window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      });
+    }
+
+    // =========================================================================
+    // 5. ANIMATION LOOP
+    // =========================================================================
+    const clock = new THREE.Clock();
+
+    function animate() {
+      requestAnimationFrame(animate);
+      const elapsed = clock.getElapsedTime();
+
+      // Smoothly interpolate 3D pillar heights & colors
+      stationMeshes.forEach((stObj, idx) => {
+        stObj.currentHeight += (stObj.targetHeight - stObj.currentHeight) * 0.08;
+        stObj.pillar.scale.y = stObj.currentHeight;
+        stObj.aura.scale.y = stObj.currentHeight * (1.03 + Math.sin(elapsed * 2.5 + idx) * 0.02);
+
+        stObj.currentColor.lerp(stObj.targetColor, 0.08);
+        stObj.pillar.material.color.copy(stObj.currentColor);
+        stObj.pillar.material.emissive.copy(stObj.currentColor);
+        stObj.aura.material.color.copy(stObj.currentColor);
+
+        stObj.sprite.position.y = stObj.currentHeight + 1.15 + Math.sin(elapsed * 2 + idx) * 0.08;
+      });
+
+      // Pulse selection ring on ground
+      if (selectionRing) {
+        const s = 1 + Math.sin(elapsed * 4) * 0.08;
+        selectionRing.scale.set(s, s, 1);
+      }
+
+      // Gently drift smog particles
+      if (smogParticles) {
+        smogParticles.rotation.y = elapsed * 0.03;
+      }
+
+      // Move traffic light dots along roads
+      trafficDots.forEach((t) => {
+        if (t.isHorizontal) {
+          t.mesh.position.x += t.speed;
+          if (t.mesh.position.x > 11.5) t.mesh.position.x = -11.5;
+          if (t.mesh.position.x < -11.5) t.mesh.position.x = 11.5;
+        } else {
+          t.mesh.position.z += t.speed;
+          if (t.mesh.position.z > 11.5) t.mesh.position.z = -11.5;
+          if (t.mesh.position.z < -11.5) t.mesh.position.z = 11.5;
+        }
+      });
+
+      controls.update();
+      renderer.render(scene, camera);
+    }
+
+    window.onload = function () {
+      initScene();
+      animate();
+    };
+  </script>
+</body>
+</html>
