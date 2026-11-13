@@ -1,4 +1,394 @@
-    // Helper: Convert AQI or metric value to color and severity label
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>DA-013: Air Quality & Pollution Pattern Analysis (3D)</title>
+  <!-- Tailwind CSS for responsive glassmorphism UI -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Inter Font -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <!-- Three.js & OrbitControls via CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+  <style>
+    * {
+      box-sizing: border-box;
+      font-family: 'Inter', sans-serif;
+      -webkit-tap-highlight-color: transparent;
+    }
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: #060b14;
+      color: #f8fafc;
+    }
+    #canvas-container {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+      touch-action: none;
+    }
+    .glass-panel {
+      background: rgba(15, 23, 42, 0.72);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border: 1px solid rgba(148, 163, 184, 0.18);
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+    }
+    .glass-chip {
+      background: rgba(30, 41, 59, 0.65);
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      transition: all 0.2s ease;
+    }
+    .glass-chip:hover {
+      background: rgba(51, 65, 85, 0.85);
+      border-color: rgba(56, 189, 248, 0.5);
+    }
+    .glass-chip.active {
+      background: linear-gradient(135deg, rgba(14, 165, 233, 0.35), rgba(20, 184, 166, 0.35));
+      border-color: #38bdf8;
+      color: #ffffff;
+      box-shadow: 0 0 14px rgba(56, 189, 248, 0.3);
+    }
+    .no-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .no-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+    @keyframes pulseGlow {
+      0%, 100% { opacity: 0.9; transform: scale(1); }
+      50% { opacity: 1; transform: scale(1.04); }
+    }
+    .badge-pulse {
+      animation: pulseGlow 2.5s infinite ease-in-out;
+    }
+  </style>
+</head>
+<body>
+  <!-- 3D WebGL Viewport -->
+  <div id="canvas-container"></div>
+
+  <!-- Top Header & Controls Overlay -->
+  <div class="fixed top-0 left-0 right-0 z-10 p-3 sm:p-4 pointer-events-none flex flex-col gap-2.5">
+    <div class="flex items-start justify-between gap-2">
+      <div class="glass-panel rounded-2xl px-3.5 py-2.5 sm:px-5 sm:py-3 pointer-events-auto max-w-xl">
+        <div class="flex items-center gap-2 mb-0.5">
+          <span class="inline-block w-2 h-2 rounded-full bg-teal-400 badge-pulse"></span>
+          <span class="text-[10px] sm:text-xs font-bold uppercase tracking-widest text-teal-400">
+            Environmental Analytics • 3D Spatial Model
+          </span>
+        </div>
+        <h1 class="text-sm sm:text-lg font-extrabold text-white leading-tight">
+          DA-013: Air Quality &amp; Pollution Pattern Analysis
+        </h1>
+        <p class="hidden sm:block text-xs text-slate-300 mt-0.5">
+          Tap any 3D monitoring tower or switch seasons to inspect pollutant dispersion across urban zones.
+        </p>
+      </div>
+
+      <!-- Camera & Summary Pill Controls -->
+      <div class="flex items-center gap-1.5 sm:gap-2 pointer-events-auto shrink-0">
+        <button id="btn-autorotate" title="Toggle Auto-Rotate"
+          class="glass-panel glass-chip active rounded-xl px-2.5 py-2 sm:px-3.5 sm:py-2.5 text-xs font-semibold text-slate-200 flex items-center gap-1.5 cursor-pointer">
+          <svg class="w-4 h-4 text-sky-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+          <span class="hidden md:inline">Auto-Rotate</span>
+        </button>
+
+        <button id="btn-reset-cam" title="Reset 3D Camera"
+          class="glass-panel glass-chip rounded-xl px-2.5 py-2 sm:px-3.5 sm:py-2.5 text-xs font-semibold text-slate-200 flex items-center gap-1.5 cursor-pointer">
+          <svg class="w-4 h-4 text-teal-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+          </svg>
+          <span class="hidden md:inline">Reset View</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Second Row: Season Selector & Pollutant Selector -->
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-2">
+      <!-- Season Filter Strip -->
+      <div class="glass-panel rounded-2xl p-1.5 pointer-events-auto flex items-center gap-1 overflow-x-auto no-scrollbar max-w-full">
+        <span class="text-[11px] font-semibold text-slate-400 px-2 shrink-0">Season:</span>
+        <button data-season="winter" class="season-btn glass-chip active rounded-xl px-3 py-1.5 text-xs font-semibold whitespace-nowrap cursor-pointer">
+          ❄️ Winter (Peak)
+        </button>
+        <button data-season="postMonsoon" class="season-btn glass-chip rounded-xl px-3 py-1.5 text-xs font-semibold whitespace-nowrap cursor-pointer">
+          🍂 Post-Monsoon
+        </button>
+        <button data-season="summer" class="season-btn glass-chip rounded-xl px-3 py-1.5 text-xs font-semibold whitespace-nowrap cursor-pointer">
+          ☀️ Summer
+        </button>
+        <button data-season="monsoon" class="season-btn glass-chip rounded-xl px-3 py-1.5 text-xs font-semibold whitespace-nowrap cursor-pointer">
+          🌧️ Monsoon (Clean)
+        </button>
+      </div>
+
+      <!-- Pollutant Selector Strip -->
+      <div class="glass-panel rounded-2xl p-1.5 pointer-events-auto flex items-center gap-1 overflow-x-auto no-scrollbar max-w-full">
+        <span class="text-[11px] font-semibold text-slate-400 px-2 shrink-0">Metric:</span>
+        <button data-metric="aqi" class="metric-btn glass-chip active rounded-xl px-2.5 py-1.5 text-xs font-semibold whitespace-nowrap cursor-pointer">
+          Overall AQI
+        </button>
+        <button data-metric="pm25" class="metric-btn glass-chip rounded-xl px-2.5 py-1.5 text-xs font-semibold whitespace-nowrap cursor-pointer">
+          PM2.5
+        </button>
+        <button data-metric="pm10" class="metric-btn glass-chip rounded-xl px-2.5 py-1.5 text-xs font-semibold whitespace-nowrap cursor-pointer">
+          PM10
+        </button>
+        <button data-metric="no2" class="metric-btn glass-chip rounded-xl px-2.5 py-1.5 text-xs font-semibold whitespace-nowrap cursor-pointer">
+          NO₂
+        </button>
+        <button data-metric="co" class="metric-btn glass-chip rounded-xl px-2.5 py-1.5 text-xs font-semibold whitespace-nowrap cursor-pointer">
+          CO
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Left / Floating AQI Legend & City Average Summary -->
+  <div class="hidden sm:flex fixed left-4 bottom-4 z-10 flex-col gap-2.5 pointer-events-none w-64">
+    <div class="glass-panel rounded-2xl p-3.5 pointer-events-auto">
+      <div class="flex items-center justify-between mb-1">
+        <span class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">City-Wide Average</span>
+        <span id="city-status-badge" class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-500/20 text-red-300 border border-red-500/40">
+          Unhealthy
+        </span>
+      </div>
+      <div class="flex items-baseline gap-2">
+        <span id="city-avg-val" class="text-3xl font-extrabold text-white">182</span>
+        <span id="city-avg-unit" class="text-xs font-medium text-slate-400">AQI Index</span>
+      </div>
+      <p id="season-insight-text" class="text-[11px] text-slate-300 mt-1.5 leading-relaxed">
+        Thermal inversions trap fine particulates near surface corridors.
+      </p>
+    </div>
+
+    <div class="glass-panel rounded-2xl p-3.5 pointer-events-auto">
+      <p class="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-2">AQI Severity Scale</p>
+      <div class="space-y-1.5 text-xs">
+        <div class="flex items-center justify-between">
+          <span class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>Good</span>
+          <span class="text-slate-400 font-mono text-[11px]">0 – 50</span>
+        </div>
+        <div class="flex items-center justify-between">
+          <span class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-yellow-400"></span>Moderate</span>
+          <span class="text-slate-400 font-mono text-[11px]">51 – 100</span>
+        </div>
+        <div class="flex items-center justify-between">
+          <span class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-orange-500"></span>Sensitive</span>
+          <span class="text-slate-400 font-mono text-[11px]">101 – 150</span>
+        </div>
+        <div class="flex items-center justify-between">
+          <span class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-red-500"></span>Unhealthy</span>
+          <span class="text-slate-400 font-mono text-[11px]">151 – 250</span>
+        </div>
+        <div class="flex items-center justify-between">
+          <span class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-purple-500"></span>Hazardous</span>
+          <span class="text-slate-400 font-mono text-[11px]">250+</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right / Bottom Station Inspector Card & Quick Station Selector -->
+  <div class="fixed bottom-3 left-3 right-3 sm:left-auto sm:right-4 sm:bottom-4 sm:w-96 z-10 pointer-events-none flex flex-col gap-2">
+    <div class="glass-panel rounded-2xl p-1.5 pointer-events-auto flex items-center gap-1 overflow-x-auto no-scrollbar">
+      <button data-station="0" class="station-pill glass-chip active rounded-xl px-2.5 py-1 text-[11px] font-semibold whitespace-nowrap cursor-pointer">Industrial</button>
+      <button data-station="1" class="station-pill glass-chip rounded-xl px-2.5 py-1 text-[11px] font-semibold whitespace-nowrap cursor-pointer">Highway</button>
+      <button data-station="2" class="station-pill glass-chip rounded-xl px-2.5 py-1 text-[11px] font-semibold whitespace-nowrap cursor-pointer">City Center</button>
+      <button data-station="3" class="station-pill glass-chip rounded-xl px-2.5 py-1 text-[11px] font-semibold whitespace-nowrap cursor-pointer">Residential</button>
+      <button data-station="4" class="station-pill glass-chip rounded-xl px-2.5 py-1 text-[11px] font-semibold whitespace-nowrap cursor-pointer">Riverside</button>
+      <button data-station="5" class="station-pill glass-chip rounded-xl px-2.5 py-1 text-[11px] font-semibold whitespace-nowrap cursor-pointer">Green Park</button>
+    </div>
+
+    <div id="station-card" class="glass-panel rounded-2xl p-4 pointer-events-auto transition-all duration-300">
+      <div class="flex items-start justify-between gap-2 mb-2.5">
+        <div>
+          <div class="flex items-center gap-1.5">
+            <span id="st-code" class="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-slate-800 text-sky-400 border border-slate-700">STN-01</span>
+            <span id="st-zone-type" class="text-[11px] font-medium text-slate-400">Heavy Manufacturing Belt</span>
+          </div>
+          <h2 id="st-name" class="text-base sm:text-lg font-bold text-white mt-0.5">Industrial Zone</h2>
+        </div>
+
+        <div class="text-right shrink-0">
+          <div id="st-main-val" class="text-2xl sm:text-3xl font-extrabold text-purple-400 leading-none">278</div>
+          <div id="st-category" class="text-[10px] font-bold uppercase tracking-wider mt-1 px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/40 inline-block">
+            Hazardous
+          </div>
+        </div>
+      </div>
+
+      <!-- 4 Pollutant Sub-Metrics Grid -->
+      <div class="grid grid-cols-4 gap-1.5 mb-3">
+        <div class="bg-slate-900/70 border border-slate-800 rounded-xl p-2 text-center">
+          <div class="text-[10px] text-slate-400 font-semibold">PM2.5</div>
+          <div id="val-pm25" class="text-xs sm:text-sm font-bold text-white mt-0.5">184</div>
+          <div class="text-[9px] text-slate-500">μg/m³</div>
+        </div>
+        <div class="bg-slate-900/70 border border-slate-800 rounded-xl p-2 text-center">
+          <div class="text-[10px] text-slate-400 font-semibold">PM10</div>
+          <div id="val-pm10" class="text-xs sm:text-sm font-bold text-white mt-0.5">312</div>
+          <div class="text-[9px] text-slate-500">μg/m³</div>
+        </div>
+        <div class="bg-slate-900/70 border border-slate-800 rounded-xl p-2 text-center">
+          <div class="text-[10px] text-slate-400 font-semibold">NO₂</div>
+          <div id="val-no2" class="text-xs sm:text-sm font-bold text-white mt-0.5">92</div>
+          <div class="text-[9px] text-slate-500">μg/m³</div>
+        </div>
+        <div class="bg-slate-900/70 border border-slate-800 rounded-xl p-2 text-center">
+          <div class="text-[10px] text-slate-400 font-semibold">CO</div>
+          <div id="val-co" class="text-xs sm:text-sm font-bold text-white mt-0.5">2.8</div>
+          <div class="text-[9px] text-slate-500">mg/m³</div>
+        </div>
+      </div>
+
+      <div class="bg-slate-900/60 border border-slate-800/90 rounded-xl p-2.5 text-xs">
+        <div class="flex items-center justify-between mb-1">
+          <span class="text-slate-400 font-medium">Dominant Pollutant:</span>
+          <span id="st-dominant" class="font-bold text-amber-400">PM2.5 &amp; Industrial SO₂/PM10</span>
+        </div>
+        <p id="st-recommendation" class="text-[11px] text-slate-300 leading-snug">
+          <strong class="text-teal-400">Planner Action:</strong> Enforce stack scrubbers, restrict night-time freight idling, and expand perimeter vegetative buffers.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const SEASONS = {
+      winter: {
+        label: 'Winter (Peak Pollution)',
+        smogOpacity: 0.58,
+        fogDensity: 0.024,
+        insight: 'Thermal inversions and low wind speeds trap particulates near surface corridors (3.4× WHO limit).'
+      },
+      postMonsoon: {
+        label: 'Post-Monsoon',
+        smogOpacity: 0.42,
+        fogDensity: 0.017,
+        insight: 'Dropping temperatures and stagnant air trigger rapid post-October particulate accumulation.'
+      },
+      summer: {
+        label: 'Summer',
+        smogOpacity: 0.26,
+        fogDensity: 0.011,
+        insight: 'Higher mixing heights disperse fine smoke, but dry winds elevate coarse PM10 dust.'
+      },
+      monsoon: {
+        label: 'Monsoon (Cleanest)',
+        smogOpacity: 0.10,
+        fogDensity: 0.006,
+        insight: 'Frequent rainfall washes out suspended aerosols, keeping 82% of readings in safe limits.'
+      }
+    };
+
+    const STATIONS_DATA = [
+      {
+        id: 'STN-01',
+        name: 'Industrial Zone',
+        zoneType: 'Heavy Manufacturing Belt',
+        x: -7.5,
+        z: -6.5,
+        dominant: 'PM2.5 & Coarse PM10',
+        recommendation: 'Enforce stack emission scrubbers, restrict diesel freight idling, and plant multi-tier green belts.',
+        readings: {
+          winter:      { aqi: 278, pm25: 184, pm10: 312, no2: 92, co: 2.8 },
+          postMonsoon: { aqi: 224, pm25: 146, pm10: 258, no2: 78, co: 2.3 },
+          summer:      { aqi: 158, pm25: 94,  pm10: 215, no2: 61, co: 1.7 },
+          monsoon:     { aqi: 86,  pm25: 44,  pm10: 98,  no2: 39, co: 1.1 }
+        }
+      },
+      {
+        id: 'STN-02',
+        name: 'Highway Junction',
+        zoneType: 'Arterial Transit Corridor',
+        x: 7.0,
+        z: -5.5,
+        dominant: 'NO₂ & Vehicular Exhaust',
+        recommendation: 'Introduce peak-hour Low-Emission Zones (08:00–10:00) and synchronize traffic signal corridors.',
+        readings: {
+          winter:      { aqi: 236, pm25: 152, pm10: 264, no2: 108, co: 3.1 },
+          postMonsoon: { aqi: 189, pm25: 121, pm10: 218, no2: 91,  co: 2.5 },
+          summer:      { aqi: 138, pm25: 82,  pm10: 176, no2: 74,  co: 1.9 },
+          monsoon:     { aqi: 74,  pm25: 38,  pm10: 84,  no2: 46,  co: 1.2 }
+        }
+      },
+      {
+        id: 'STN-03',
+        name: 'City Center',
+        zoneType: 'Commercial & Retail Core',
+        x: 0.0,
+        z: 0.0,
+        dominant: 'PM2.5 & Commercial NO₂',
+        recommendation: 'Expand pedestrian-only zones, promote EV last-mile delivery, and ban backup diesel generators.',
+        readings: {
+          winter:      { aqi: 198, pm25: 128, pm10: 221, no2: 82, co: 2.2 },
+          postMonsoon: { aqi: 162, pm25: 104, pm10: 186, no2: 70, co: 1.8 },
+          summer:      { aqi: 118, pm25: 68,  pm10: 152, no2: 55, co: 1.4 },
+          monsoon:     { aqi: 62,  pm25: 31,  pm10: 71,  no2: 34, co: 0.9 }
+        }
+      },
+      {
+        id: 'STN-04',
+        name: 'Residential North',
+        zoneType: 'High-Density Housing Ward',
+        x: -6.5,
+        z: 6.5,
+        dominant: 'PM2.5 (Biomass & Heating)',
+        recommendation: 'Deploy neighborhood micro-sensors and issue early winter health advisories for schools.',
+        readings: {
+          winter:      { aqi: 164, pm25: 109, pm10: 182, no2: 54, co: 1.6 },
+          postMonsoon: { aqi: 134, pm25: 88,  pm10: 154, no2: 47, co: 1.4 },
+          summer:      { aqi: 92,  pm25: 51,  pm10: 126, no2: 36, co: 1.0 },
+          monsoon:     { aqi: 46,  pm25: 22,  pm10: 54,  no2: 21, co: 0.6 }
+        }
+      },
+      {
+        id: 'STN-05',
+        name: 'Riverside',
+        zoneType: 'Open Water Ventilation Corridor',
+        x: 7.5,
+        z: 5.5,
+        dominant: 'Moderate PM10',
+        recommendation: 'Protect riparian wind corridors from high-rise obstruction to preserve natural city ventilation.',
+        readings: {
+          winter:      { aqi: 128, pm25: 79,  pm10: 146, no2: 42, co: 1.2 },
+          postMonsoon: { aqi: 104, pm25: 64,  pm10: 122, no2: 37, co: 1.0 },
+          summer:      { aqi: 76,  pm25: 41,  pm10: 98,  no2: 29, co: 0.8 },
+          monsoon:     { aqi: 38,  pm25: 18,  pm10: 44,  no2: 17, co: 0.5 }
+        }
+      },
+      {
+        id: 'STN-06',
+        name: 'Green Park South',
+        zoneType: 'Urban Forest & Ecological Reserve',
+        x: 0.5,
+        z: 8.5,
+        dominant: 'Clean Baseline Reference',
+        recommendation: 'Maintain canopy density as a benchmark clean-air zone and replicate urban forestry elsewhere.',
+        readings: {
+          winter:      { aqi: 94,  pm25: 53,  pm10: 104, no2: 28, co: 0.8 },
+          postMonsoon: { aqi: 78,  pm25: 42,  pm10: 88,  no2: 24, co: 0.7 },
+          summer:      { aqi: 54,  pm25: 28,  pm10: 66,  no2: 19, co: 0.5 },
+          monsoon:     { aqi: 28,  pm25: 13,  pm10: 32,  no2: 12, co: 0.3 }
+        }
+      }
+    ];
+
     function getSeverity(val, metric) {
       let aqiEq = val;
       if (metric === 'pm25') aqiEq = val * 1.5;
@@ -13,9 +403,6 @@
       return { label: 'Hazardous', color: 0xa855f7, hex: '#a855f7', badgeBg: 'bg-purple-500/20 text-purple-300 border-purple-500/40' };
     }
 
-    // =========================================================================
-    // 2. THREE.JS 3D SCENE SETUP
-    // =========================================================================
     let currentSeason = 'winter';
     let currentMetric = 'aqi';
     let selectedStationIdx = 0;
@@ -39,13 +426,11 @@
     controls.autoRotateSpeed = 0.8;
     controls.maxPolarAngle = Math.PI / 2.1;
 
-    // Lights
     scene.add(new THREE.AmbientLight(0x94a3b8, 0.8));
     const dirLight = new THREE.DirectionalLight(0xffffff, 1);
     dirLight.position.set(15, 25, 15);
     scene.add(dirLight);
 
-    // City Grid & Base Ground
     const ground = new THREE.Mesh(
       new THREE.PlaneGeometry(34, 34),
       new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.8 })
@@ -57,7 +442,6 @@
     gridHelper.position.y = 0.02;
     scene.add(gridHelper);
 
-    // Decorative City Blocks
     const blockMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.6 });
     for (let i = 0; i < 45; i++) {
       const bx = (Math.random() - 0.5) * 28;
@@ -70,7 +454,6 @@
       scene.add(building);
     }
 
-    // Monitoring Towers & Floating Labels
     const towerMeshes = [];
     const ringMeshes = [];
     const labelSprites = [];
@@ -130,9 +513,6 @@
       labelSprites.push(sprite);
     });
 
-    // =========================================================================
-    // 3. UI & 3D UPDATE LOGIC
-    // =========================================================================
     function updateVisualization() {
       scene.fog.density = SEASONS[currentSeason].fogDensity;
       let totalCityVal = 0;
@@ -154,7 +534,6 @@
         ring.material.color.setHex(sev.color);
         ring.scale.setScalar(idx === selectedStationIdx ? 1.35 : 1.0);
 
-        // Update 3D Sprite Label
         scene.remove(labelSprites[idx]);
         const unitLabel = currentMetric === 'aqi' ? `AQI ${val}` : `${currentMetric.toUpperCase()} ${val}`;
         const newSprite = createLabelSprite(st.name, unitLabel, sev.hex);
@@ -163,7 +542,6 @@
         labelSprites[idx] = newSprite;
       });
 
-      // Update City Average Card
       const avg = (totalCityVal / STATIONS_DATA.length).toFixed(currentMetric === 'co' ? 1 : 0);
       const citySev = getSeverity(avg, currentMetric);
       document.getElementById('city-avg-val').textContent = avg;
@@ -206,7 +584,6 @@
       });
     }
 
-    // Event Listeners
     document.querySelectorAll('.season-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         document.querySelectorAll('.season-btn').forEach(b => b.classList.remove('active'));
@@ -242,7 +619,6 @@
       controls.target.set(0, 0, 0);
     });
 
-    // Raycaster for clicking 3D towers
     const raycaster = new THREE.Raycaster();
     const pointer = new THREE.Vector2();
     window.addEventListener('pointerdown', (e) => {
@@ -273,5 +649,4 @@
     animate();
   </script>
 </body>
-      </html>
-        
+</html>
